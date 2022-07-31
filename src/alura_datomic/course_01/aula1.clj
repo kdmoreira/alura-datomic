@@ -1,4 +1,4 @@
-(ns alura-datomic.aula1
+(ns alura-datomic.course-01.aula1
   (:use clojure.pprint)
   (:require [datomic.api :as d]
             [alura-datomic.ecommerce.db :as db]
