@@ -1,5 +1,6 @@
-(ns alura-datomic.course-01.aula6(:use clojure.pprint)
-(:require [datomic.api :as d]
+(ns alura-datomic.course-01.aula6
+  (:use clojure.pprint)
+  (:require [datomic.api :as d]
           [alura-datomic.ecommerce.db :as db]
           [alura-datomic.ecommerce.model :as model]))
 

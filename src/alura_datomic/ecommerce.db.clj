@@ -24,7 +24,11 @@
               :db/doc         "O preço de um produto com precisão monetária"}
              {:db/ident       :produto/palavra-chave
               :db/valueType   :db.type/string
-              :db/cardinality :db.cardinality/many}])
+              :db/cardinality :db.cardinality/many}
+             {:db/ident       :produto/id
+              :db/valueType   :db.type/uuid
+              :db/cardinality :db.cardinality/one
+              :db/unique      :db.unique/identity}])
 
 (defn cria-schema [conn]
   (d/transact conn schema))
@@ -83,3 +87,12 @@
          :in    $ ?palavra-chave-buscada
          :where [?entidade :produto/palavra-chave ?palavra-chave-buscada]]
        db palavra-chave))
+
+(defn um-produto-por-db-id [db db-id]
+  (d/pull db '[*] db-id))
+
+; when you don't use the db identifier, you must
+; specify where it comes from, in this case, :produto/id
+; these are lookup refs
+(defn um-produto [db produto-id]
+  (d/pull db '[*] [:produto/id produto-id]))
