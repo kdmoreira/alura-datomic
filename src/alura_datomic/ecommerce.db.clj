@@ -41,7 +41,12 @@
              {:db/ident       :categoria/id
               :db/valueType   :db.type/uuid
               :db/cardinality :db.cardinality/one
-              :db/unique      :db.unique/identity}])
+              :db/unique      :db.unique/identity}
+             
+             ; Transações
+             {:db/ident       :tx-data/ip
+              :db/valueType   :db.type/string
+              :db/cardinality :db.cardinality/one}])
 
 (defn cria-schema! [conn]
   (d/transact conn schema))
@@ -129,8 +134,12 @@
   (let [a-transacionar (db-adds-de-atribuicao-de-categoria produtos categoria)]
     (d/transact conn a-transacionar)))
 
-(defn adiciona-produtos! [conn produtos]
-  (d/transact conn produtos))
+(defn adiciona-produtos!
+  ([conn produtos]
+   (d/transact conn produtos))
+  ([conn produtos ip]
+   (let [db-add-ip [:db/add "datomic.tx" :tx-data/ip ip]]
+     (d/transact conn (conj produtos db-add-ip)))))
 
 (defn adiciona-categorias! [conn categorias]
   (d/transact conn categorias))
@@ -139,8 +148,8 @@
   (d/q '[:find ?nome ?nome-da-categoria
          :keys produto categoria
          :where [?produto :produto/nome ?nome]
-                [?produto :produto/categoria ?categoria]
-                [?categoria :categoria/nome ?nome-da-categoria]]
+         [?produto :produto/categoria ?categoria]
+         [?categoria :categoria/nome ?nome-da-categoria]]
        db))
 
 ; Using FORWARD navigation in the pull to bring category info as well
@@ -149,7 +158,7 @@
   (d/q '[:find (pull ?produto [* {:produto/categoria [:categoria/nome]}])
          :in $ ?nome
          :where [?categoria :categoria/nome ?nome]
-                [?produto :produto/categoria ?categoria]]
+         [?produto :produto/categoria ?categoria]]
        db nome-da-categoria))
 
 ; Using BACKWARD navigation in the pull to bring products that reference the category
@@ -162,3 +171,51 @@
          [?produto :produto/categoria ?categoria]]
        db nome-da-categoria))
 
+; Be careful because datomic works with sets, therefore, if you want to know how many
+; products that have a price are there in the database, and use a (count ?preco)
+; datomic will treat prices as a set and will not count repeating ones, that is,
+; if there are 6 products in total and two have the same price, it will count 5
+; Therefore, use :with and inform an unique info about the entity so that it
+; considers it when executing :find...
+(defn resumo-dos-produtos [db]
+  (d/q '[:find (min ?preco) (max ?preco) (count ?preco) (sum ?preco)
+         :keys minimo maximo quantidade preco-total
+         :with ?produto
+         :where [?produto :produto/preco ?preco]]
+       db))
+
+(defn resumo-dos-produtos-por-categoria [db]
+  (d/q '[:find ?categoria (min ?preco) (max ?preco) (count ?preco) (sum ?preco)
+         :keys categoria minimo maximo quantidade preco-total
+         :with ?produto
+         :where [?produto :produto/preco ?preco]
+         [?produto :produto/categoria ?categoria]
+         [?categoria :categoria/nome ?nome]]
+       db))
+
+; Variation that executes two separate queries
+(defn todos-os-produtos-mais-caros-v1 [db]
+  (let [preco-mais-alto (ffirst (d/q '[:find (max ?preco)
+                                       :where [_ :produto/preco ?preco]]
+                                     db))]
+    (d/q '[:find (pull ?produto [*])
+           :in $ ?preco
+           :where [?produto :produto/preco ?preco]]
+         db preco-mais-alto)))
+
+; Variation that executes a nested query
+(defn todos-os-produtos-mais-caros-v2 [db]
+  (d/q '[:find (pull ?produto [*])
+         :where [(q '[:find (max ?preco)
+                      :where [_ :produto/preco ?preco]]
+                    $) [[?preco]]] ; the input ($ -> the db itself) and the output (binded as ?preco) 
+                [?produto :produto/preco ?preco]]
+       db))
+
+; Adding transaction info
+(defn todos-os-produtos-do-ip [db ip]
+  (d/q '[:find (pull ?produto [*])
+         :in $ ?ip-buscado
+         :where [?transacao :tx-data/ip ?ip-buscado]
+                [?produto :produto/id _ ?transacao]]
+       db ip))
