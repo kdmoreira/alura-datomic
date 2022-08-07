@@ -10,7 +10,8 @@
 (defn apaga-banco []
   (d/delete-database db-uri))
 
-(def schema [{:db/ident       :produto/nome
+(def schema [; Produtos
+             {:db/ident       :produto/nome
               :db/valueType   :db.type/string
               :db/cardinality :db.cardinality/one
               :db/doc         "O nome de um produto"}
@@ -28,9 +29,21 @@
              {:db/ident       :produto/id
               :db/valueType   :db.type/uuid
               :db/cardinality :db.cardinality/one
+              :db/unique      :db.unique/identity}
+             {:db/ident       :produto/categoria
+              :db/valueType   :db.type/ref
+              :db/cardinality :db.cardinality/one}
+
+             ; Categorias
+             {:db/ident       :categoria/nome
+              :db/valueType   :db.type/string
+              :db/cardinality :db.cardinality/one}
+             {:db/ident       :categoria/id
+              :db/valueType   :db.type/uuid
+              :db/cardinality :db.cardinality/one
               :db/unique      :db.unique/identity}])
 
-(defn cria-schema [conn]
+(defn cria-schema! [conn]
   (d/transact conn schema))
 
 ; Explicit pull field by field
@@ -62,7 +75,7 @@
   (d/q '[:find  ?nome, ?preco
          :keys  :produto/nome, :produto/preco
          :where [?produto :produto/preco ?preco]
-                [?produto :produto/nome  ?nome]] db))
+         [?produto :produto/nome  ?nome]] db))
 
 ; Be careful when filtering queries, because you
 ; are responsible for defining a plan of action
@@ -77,9 +90,9 @@
   (d/q '[:find  ?nome, ?preco
          :in $ ?preco-buscado
          :keys  :produto/nome, :produto/preco
-         :where [?produto :produto/preco ?preco] 
-                [(> ?preco ?preco-buscado)]
-                [?produto :produto/nome  ?nome]]
+         :where [?produto :produto/preco ?preco]
+         [(> ?preco ?preco-buscado)]
+         [?produto :produto/nome  ?nome]]
        db preco-minimo))
 
 (defn todos-os-produtos-por-palavra-chave [db palavra-chave]
@@ -96,3 +109,56 @@
 ; these are lookup refs
 (defn um-produto [db produto-id]
   (d/pull db '[*] [:produto/id produto-id]))
+
+(defn todas-as-categorias [db]
+  (d/q '[:find (pull ?categoria [*])
+         :where [?categoria :categoria/id]]
+       db))
+
+(defn db-adds-de-atribuicao-de-categoria
+  [produtos categoria]
+  (reduce (fn [db-adds produto] (conj db-adds
+                                      [:db/add
+                                       [:produto/id (:produto/id produto)]
+                                       :produto/categoria
+                                       [:categoria/id (:categoria/id categoria)]]))
+          []
+          produtos))
+
+(defn atribui-categorias! [conn produtos categoria]
+  (let [a-transacionar (db-adds-de-atribuicao-de-categoria produtos categoria)]
+    (d/transact conn a-transacionar)))
+
+(defn adiciona-produtos! [conn produtos]
+  (d/transact conn produtos))
+
+(defn adiciona-categorias! [conn categorias]
+  (d/transact conn categorias))
+
+(defn todos-os-nomes-de-produtos-e-categorias [db]
+  (d/q '[:find ?nome ?nome-da-categoria
+         :keys produto categoria
+         :where [?produto :produto/nome ?nome]
+                [?produto :produto/categoria ?categoria]
+                [?categoria :categoria/nome ?nome-da-categoria]]
+       db))
+
+; Using FORWARD navigation in the pull to bring category info as well
+; "who is produto referencing?", notice the {}
+(defn todos-os-produtos-da-categoria-fw [db nome-da-categoria]
+  (d/q '[:find (pull ?produto [* {:produto/categoria [:categoria/nome]}])
+         :in $ ?nome
+         :where [?categoria :categoria/nome ?nome]
+                [?produto :produto/categoria ?categoria]]
+       db nome-da-categoria))
+
+; Using BACKWARD navigation in the pull to bring products that reference the category
+; Notice the underscore
+(defn todos-os-produtos-da-categoria-bw [db nome-da-categoria]
+  (d/q '[:find (pull ?categoria [:categoria/nome {:produto/_categoria [:produto/nome
+                                                                       :produto/slug]}])
+         :in $ ?nome
+         :where [?categoria :categoria/nome ?nome]
+         [?produto :produto/categoria ?categoria]]
+       db nome-da-categoria))
+

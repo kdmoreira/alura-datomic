@@ -6,7 +6,7 @@
 
 (def conn (db/abre-conexao))
 
-(db/cria-schema conn)
+(db/cria-schema! conn)
 
 ; Adding products
 (let [computador (model/novo-produto (model/uuid) "Computador Novo",

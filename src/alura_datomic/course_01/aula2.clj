@@ -6,7 +6,7 @@
 
 (def conn (db/abre-conexao))
 
-(db/cria-schema conn)
+(db/cria-schema! conn)
 
 ; Not all identifiers were passed, but Datomic supports it
 (let [calculadora {:produto/nome "Calculadora 4 operações"}]

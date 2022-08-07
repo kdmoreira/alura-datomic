@@ -6,7 +6,7 @@
 
 (def conn (db/abre-conexao))
 
-(db/cria-schema conn)
+(db/cria-schema! conn)
 
 ; Transact receives a connection and a sequence
 (let [computador (model/novo-produto "Computador Novo",

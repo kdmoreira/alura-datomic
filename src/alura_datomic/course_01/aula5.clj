@@ -6,7 +6,7 @@
 
 (def conn (db/abre-conexao))
 
-(db/cria-schema conn)
+(db/cria-schema! conn)
 
 ; Adding products and using result to see what is :db-after
 (let [computador (model/novo-produto "Computador Novo",
